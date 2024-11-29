@@ -12,23 +12,27 @@
 #include "exceptions.h"
 #include "mio.h"
 #include "threadlock.h"
+#include "vector.h"
 
 namespace ddb {
 
 bool isBuildableInternal(const Entry& e, std::string& subfolder) {
 
-    if (e.type == PointCloud) {
+    if (e.type == EntryType::PointCloud) {
         // Special case: do not build if this entry is in a "ept-data" folder
         // as it indicates an EPT dataset file
         if (fs::path(e.path).parent_path().filename().string() == "ept-data") return false;
 
         subfolder = "ept";
         return true;
-    }else if (e.type == GeoRaster){
+    }else if (e.type == EntryType::GeoRaster) {
         subfolder = "cog";
         return true;
-    }else if (e.type == Model){
+    }else if (e.type == EntryType::Model) {
         subfolder = "nxs";
+        return true;
+    } else if (e.type == EntryType::Vector) {
+        subfolder = "vec";
         return true;
     }
 
@@ -68,6 +72,7 @@ void buildInternal(Database* db, const Entry& e,
     ThreadLock lock("build-" + (db->rootDirectory() / e.hash).string());
 
     if (fs::exists(outputFolder) && !force) {
+        LOGD << "Output folder " << outputFolder << " already exists, skipping";
         return;
     }
 
@@ -84,15 +89,18 @@ void buildInternal(Database* db, const Entry& e,
     try {
         bool built = false;
 
-        if (e.type == PointCloud) {
+        if (e.type == EntryType::PointCloud) {
             const std::vector vec = {relativePath};
             buildEpt(vec, tempFolder);
             built = true;
-        }else if (e.type == GeoRaster){
+        } else if (e.type == EntryType::GeoRaster){
             buildCog(relativePath, (fs::path(tempFolder) / "cog.tif").string());
             built = true;
-        }else if (e.type == Model){
+        } else if (e.type == EntryType::Model){
             buildNexus(relativePath, (fs::path(tempFolder) / "model.nxz").string());
+            built = true;
+        } else if (e.type == EntryType::Vector){
+            buildVector(relativePath, (fs::path(tempFolder) / "vector.fgb").string());
             built = true;
         }
 
